@@ -422,6 +422,7 @@ function renderLibrary() {
   root.append(h('label', { class: 'btn primary big add-btn' }, '＋ 動画・画像を追加', input));
   const usage = h('div', { class: 'hint', style: 'text-align:center' });
   root.append(usage);
+  root.append(h('div', { class: 'hint', style: 'text-align:center' }, 'アプリの版：' + APP_VERSION));
   if (navigator.storage && navigator.storage.estimate) navigator.storage.estimate().then(e => {
     usage.textContent = `保存中の容量：約${Math.round((e.usage || 0) / 1048576)}MB`;
   }).catch(() => {});
@@ -1068,7 +1069,17 @@ function closePlayer() {
 
 /* ===== 起動 ===== */
 function renderAll() { renderLibrary(); renderPlay(); renderSets(); }
-if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+const APP_VERSION = 'v4';
+if ('serviceWorker' in navigator) {
+  const hadController = !!navigator.serviceWorker.controller;
+  navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then(r => r.update()).catch(() => {});
+  let reloaded = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!hadController || reloaded) return;
+    if (P) { toast('新しい版があります。閉じて開き直すと反映されます', 4000); return; }
+    reloaded = true; location.reload();
+  });
+}
 (async function init() {
   try {
     await DB.open();
