@@ -187,7 +187,7 @@ textarea.inp{resize:vertical}
 .stage.row{flex-direction:row}
 .stage.swapped .pane:first-child{order:2}
 .pane{position:relative;min-width:0;min-height:0;overflow:hidden;display:flex;align-items:center;justify-content:center;background:var(--player-bg)}
-.pane video,.pane img{width:100%;height:100%;object-fit:contain;display:block;pointer-events:none}
+.pane video,.pane img{width:100%;height:100%;object-fit:var(--fit,contain);display:block;pointer-events:none}
 .hidden-audio{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none;left:0;top:0}
 .tapfx{position:absolute;top:50%;transform:translate(-50%,-50%);background:rgba(0,0,0,.55);color:var(--player-fg);font-weight:800;font-size:18px;padding:12px 18px;border-radius:999px;opacity:0;pointer-events:none;white-space:nowrap}
 .tapfx.show{animation:fx .6s ease-out}
@@ -204,6 +204,7 @@ textarea.inp{resize:vertical}
   background:linear-gradient(rgba(0,0,0,0),rgba(0,0,0,.75))}
 .pc-row{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;align-items:center;width:100%;max-width:640px}
 .pbtn{min-height:44px;min-width:52px;padding:0 12px;border-radius:12px;background:var(--player-panel);color:var(--player-fg);font-weight:700;font-size:14px;border:1px solid rgba(255,255,255,.18)}
+.pbtn.on{background:var(--loop);color:#1b1300;border-color:var(--loop)}
 .pbtn.play{min-width:64px;font-size:22px;background:#ffffff;color:#000000}
 .psel{min-height:44px;border-radius:12px;background:var(--player-panel);color:var(--player-fg);border:1px solid rgba(255,255,255,.18);padding:0 10px;font-weight:700;font-size:14px}
 .pratio{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:700;background:var(--player-panel);border-radius:12px;padding:6px 12px;border:1px solid rgba(255,255,255,.18)}
@@ -375,7 +376,7 @@ function srcLabel(pattern, key) {
 const SPEEDS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 2];
 const newSrc = () => ({ items: [], order: 'random', loops: 1, interval: 5 });
 function defaultConfig() {
-  return { pattern: 'vid', sources: { I: newSrc(), V1: newSrc(), V2: newSrc(), AU: newSrc() }, speed: 1, layout: 'auto', ratio: 50, swapped: false, audio: 'V1' };
+  return { pattern: 'vid', sources: { I: newSrc(), V1: newSrc(), V2: newSrc(), AU: newSrc() }, speed: 1, layout: 'auto', ratio: 50, swapped: false, audio: 'V1', fit: 'contain' };
 }
 function mergeConfig(c) {
   const d = defaultConfig(); c = Object.assign(d, c || {});
@@ -754,6 +755,8 @@ function renderPlay() {
 
   const two = p.panes.length === 2;
   const sc = h('div', { class: 'card' }, h('div', { class: 'card-title' }, '再生の設定'));
+  sc.append(h('div', { class: 'set-row' }, h('span', {}, '黒い枠'), seg([['contain', '全体を表示'], ['cover', '埋める'], ['fill', '引き伸ばし']], c.fit, v => { c.fit = v; saveConfig(); })));
+  sc.append(h('div', { class: 'hint' }, '埋める：端が少し切れます／引き伸ばし：形が少し変わります'));
   if (keys.some(k => SRC_KIND[k] === 'video')) sc.append(h('div', { class: 'set-row' }, h('span', {}, '再生速度'),
     h('select', { class: 'sel', onchange: e => { c.speed = +e.target.value; saveConfig(); } }, SPEEDS.map(s => h('option', { value: String(s), selected: s === c.speed }, s + '倍')))));
   if (two) {
@@ -847,7 +850,7 @@ class VideoRunner {
   onLoopEnd() {
     if (!this.cur) return;
     this.count++;
-    if (this.items.length > 1 && this.count >= this.loops) { this.next(); return; }
+    if (this.items.length > 1 && this.count >= this.loops && !(P && P.hold)) { this.next(); return; }
     try { this.v.currentTime = this.cur.start; } catch (e) {}
     if (this.v.paused && P && P.playing) this.play();
   }
@@ -871,7 +874,7 @@ class ImageRunner {
   }
   resetTimer() {
     clearTimeout(this.timer);
-    if (this.interval > 0 && this.items.length > 1 && P && P.playing) this.timer = setTimeout(() => this.next(), this.interval * 1000);
+    if (this.interval > 0 && this.items.length > 1 && P && P.playing && !P.hold) this.timer = setTimeout(() => this.next(), this.interval * 1000);
   }
   play() { this.resetTimer(); }
   pause() { clearTimeout(this.timer); }
@@ -884,7 +887,7 @@ function openPlayer() {
   }
   const ov = $('#player'); ov.innerHTML = ''; ov.hidden = false; lockBody(true);
   const stage = h('div', { class: 'stage' });
-  P = { c, p, stage, runners: [], playing: true, ctrlTimer: null };
+  P = { c, p, stage, runners: [], playing: true, ctrlTimer: null, hold: false, solo: null };
   p.panes.forEach(key => {
     const pane = h('div', { class: 'pane' }); let r;
     if (SRC_KIND[key] === 'video') { const v = mkVideo(); pane.append(v); r = new VideoRunner(v, c.sources[key]); }
@@ -909,12 +912,26 @@ function applyLayout() {
   const dir = c.layout === 'lr' ? 'row' : c.layout === 'tb' ? 'col' : (matchMedia('(orientation: landscape)').matches ? 'row' : 'col');
   P.stage.className = 'stage ' + dir + (c.swapped ? ' swapped' : '');
   const panes = P.stage.querySelectorAll('.pane');
-  if (panes.length === 2) { panes[0].style.flex = `0 0 calc(${c.ratio}% - 1px)`; panes[1].style.flex = '1 1 0'; }
+  P.stage.style.setProperty('--fit', c.fit || 'contain');
+  P.stage.style.gap = P.solo == null ? '' : '0';
+  if (panes.length === 2) {
+    if (P.solo === 0) { panes[0].style.flex = '1 1 auto'; panes[1].style.flex = '0 0 0px'; }
+    else if (P.solo === 1) { panes[0].style.flex = '0 0 0px'; panes[1].style.flex = '1 1 auto'; }
+    else { panes[0].style.flex = `0 0 calc(${c.ratio}% - 1px)`; panes[1].style.flex = '1 1 0'; }
+  }
   else if (panes[0]) panes[0].style.flex = '1 1 auto';
+  if (P.fitBtn) P.fitBtn.textContent = { contain: '表示：全体', cover: '表示：埋める', fill: '表示：引き伸ばし' }[c.fit || 'contain'];
+  if (P.soloBtn) P.soloBtn.textContent = P.solo == null ? '画面：両方' : `画面：${paneName(P.solo)}だけ`;
+  if (P.holdBtn) { P.holdBtn.textContent = P.hold ? '🔁 今のだけリピート：オン' : '🔁 今のだけリピート：オフ'; P.holdBtn.classList.toggle('on', P.hold); }
   if (P.layoutBtn) P.layoutBtn.textContent = { auto: '分け方：自動', tb: '分け方：上下', lr: '分け方：左右' }[c.layout];
 }
 matchMedia('(orientation: landscape)').addEventListener('change', applyLayout);
 window.addEventListener('resize', applyLayout);
+function paneName(i) {
+  const key = P.p.panes[i];
+  if (SRC_KIND[key] === 'image') return '画像';
+  return P.c.pattern === 'vid+vid' ? (key === 'V1' ? '動画1' : '動画2') : '動画';
+}
 function applyAudio() {
   const c = P.c;
   P.runners.forEach(r => {
@@ -970,7 +987,18 @@ function buildControls() {
   }
   if (c.pattern === 'vid+vid') row2.append(h('select', { class: 'psel', onchange: e => { c.audio = e.target.value; applyAudio(); saveConfig(); } },
     [['V1', '音声：動画1'], ['V2', '音声：動画2'], ['both', '音声：両方']].map(([v, l]) => h('option', { value: v, selected: c.audio === v }, l))));
-  const bottom = h('div', { class: 'pc-bottom' }, row1, row2.childNodes.length ? row2 : null);
+  P.fitBtn = h('button', { class: 'pbtn', onclick: () => { c.fit = { contain: 'cover', cover: 'fill', fill: 'contain' }[c.fit || 'contain']; applyLayout(); saveConfig(); } });
+  P.holdBtn = h('button', { class: 'pbtn', onclick: () => {
+    P.hold = !P.hold; applyLayout();
+    P.runners.forEach(r => { if (r instanceof ImageRunner) r.resetTimer(); });
+    toast(P.hold ? '今の動画・画像をくり返します' : '通常の順番に戻しました');
+  } });
+  const row3 = h('div', { class: 'pc-row' }, P.holdBtn, P.fitBtn);
+  if (two) {
+    P.soloBtn = h('button', { class: 'pbtn', onclick: () => { P.solo = P.solo == null ? 0 : P.solo === 0 ? 1 : null; applyLayout(); } });
+    row3.append(P.soloBtn);
+  }
+  const bottom = h('div', { class: 'pc-bottom' }, row1, row2.childNodes.length ? row2 : null, row3);
   if (two) {
     const rv = h('span', { class: 'mono' }, `${c.ratio}:${100 - c.ratio}`);
     bottom.append(h('div', { class: 'pratio' }, '大きさ',
