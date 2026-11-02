@@ -383,6 +383,7 @@ function mergeConfig(c) {
   c.sources = Object.assign(defaultConfig().sources, c.sources || {});
   for (const k in c.sources) c.sources[k] = Object.assign(newSrc(), c.sources[k]);
   if (!PATTERNS[c.pattern]) c.pattern = 'vid';
+  if (c.audio !== 'V2') c.audio = 'V1';
   return c;
 }
 const S = { media: [], clips: [], sets: [], urls: new Map(), thumbs: new Map(), config: defaultConfig(), libFilter: 'all' };
@@ -768,8 +769,7 @@ function renderPlay() {
     sc.append(h('div', { class: 'set-row' }, h('span', {}, '位置の入れ替え'), seg([[false, 'そのまま'], [true, '入れ替える']], c.swapped, v => { c.swapped = v; saveConfig(); })));
   }
   if (c.pattern === 'vid+vid') {
-    sc.append(h('div', { class: 'set-row' }, h('span', {}, '音声'), seg([['V1', '動画1'], ['V2', '動画2'], ['both', '両方']], c.audio, v => { c.audio = v; saveConfig(); renderPlay(); })));
-    if (c.audio === 'both') sc.append(h('div', { class: 'hint' }, 'iPhoneでは片方しか鳴らないことがあります'));
+    sc.append(h('div', { class: 'set-row' }, h('span', {}, '音声'), seg([['V1', '動画1'], ['V2', '動画2']], c.audio, v => { c.audio = v; saveConfig(); renderPlay(); })));
   }
   root.append(sc);
   root.append(h('button', { class: 'btn primary big', onclick: openPlayer }, '▶︎ 再生スタート'));
@@ -826,7 +826,7 @@ class VideoRunner {
       if (this.pendingSeek != null) { try { v.currentTime = this.pendingSeek; } catch (e) {} this.pendingSeek = null; }
       this.applyRate();
     });
-    const tick = () => { if (!this.alive) return; this.check(); requestAnimationFrame(tick); };
+    const tick = () => { if (!this.alive) return; this.check(); this.guard(); requestAnimationFrame(tick); };
     requestAnimationFrame(tick);
   }
   applyRate() { if (!P) return; this.v.defaultPlaybackRate = P.c.speed; this.v.playbackRate = P.c.speed; }
@@ -847,10 +847,17 @@ class VideoRunner {
     if (!c || v.paused || v.seeking || this.pendingSeek != null) return;
     if (c.end != null && v.currentTime >= c.end - 0.02) this.onLoopEnd();
   }
+  guard() {
+    const v = this.v;
+    if (!P || !P.playing || !v.muted || !v.paused || v.ended || !this.cur) return;
+    const now = performance.now();
+    if (now - (this.kick || 0) < 700) return;
+    this.kick = now; this.play();
+  }
   onLoopEnd() {
     if (!this.cur) return;
     this.count++;
-    if (this.items.length > 1 && this.count >= this.loops && !(P && P.hold)) { this.next(); return; }
+    if (this.items.length > 1 && this.count >= this.loops && !this.held) { this.next(); return; }
     try { this.v.currentTime = this.cur.start; } catch (e) {}
     if (this.v.paused && P && P.playing) this.play();
   }
@@ -874,7 +881,7 @@ class ImageRunner {
   }
   resetTimer() {
     clearTimeout(this.timer);
-    if (this.interval > 0 && this.items.length > 1 && P && P.playing && !P.hold) this.timer = setTimeout(() => this.next(), this.interval * 1000);
+    if (this.interval > 0 && this.items.length > 1 && P && P.playing && !this.held) this.timer = setTimeout(() => this.next(), this.interval * 1000);
   }
   play() { this.resetTimer(); }
   pause() { clearTimeout(this.timer); }
@@ -887,7 +894,7 @@ function openPlayer() {
   }
   const ov = $('#player'); ov.innerHTML = ''; ov.hidden = false; lockBody(true);
   const stage = h('div', { class: 'stage' });
-  P = { c, p, stage, runners: [], playing: true, ctrlTimer: null, hold: false, solo: null };
+  P = { c, p, stage, runners: [], playing: true, ctrlTimer: null, holdIdx: 0, solo: null };
   p.panes.forEach(key => {
     const pane = h('div', { class: 'pane' }); let r;
     if (SRC_KIND[key] === 'video') { const v = mkVideo(); pane.append(v); r = new VideoRunner(v, c.sources[key]); }
@@ -902,7 +909,8 @@ function openPlayer() {
   ov.append(stage, buildControls());
   setupTaps(stage);
   applyLayout(); applyAudio();
-  P.runners.forEach(r => r.start());
+  const order = [...P.runners].sort((a, b) => (b.v && b.v.muted ? 1 : 0) - (a.v && a.v.muted ? 1 : 0));
+  order.forEach(r => r.start());
   showControls();
   requestWake();
 }
@@ -922,7 +930,7 @@ function applyLayout() {
   else if (panes[0]) panes[0].style.flex = '1 1 auto';
   if (P.fitBtn) P.fitBtn.textContent = { contain: '表示：全体', cover: '表示：埋める', fill: '表示：引き伸ばし' }[c.fit || 'contain'];
   if (P.soloBtn) P.soloBtn.textContent = P.solo == null ? '画面：両方' : `画面：${paneName(P.solo)}だけ`;
-  if (P.holdBtn) { P.holdBtn.textContent = P.hold ? '🔁 今のだけリピート：オン' : '🔁 今のだけリピート：オフ'; P.holdBtn.classList.toggle('on', P.hold); }
+  updHold();
   if (P.layoutBtn) P.layoutBtn.textContent = { auto: '分け方：自動', tb: '分け方：上下', lr: '分け方：左右' }[c.layout];
 }
 matchMedia('(orientation: landscape)').addEventListener('change', applyLayout);
@@ -932,12 +940,29 @@ function paneName(i) {
   if (SRC_KIND[key] === 'image') return '画像';
   return P.c.pattern === 'vid+vid' ? (key === 'V1' ? '動画1' : '動画2') : '動画';
 }
+function runnerName(r) {
+  if (r.audioOnly) return '音声';
+  return paneName(P.runners.indexOf(r));
+}
+function holdOptions() {
+  const all = P.runners.map((_, i) => i);
+  if (P.runners.length === 1) return [{ label: 'オフ', set: [] }, { label: 'オン', set: all }];
+  return [{ label: 'オフ', set: [] }, { label: 'すべて', set: all }, ...P.runners.map((r, i) => ({ label: runnerName(r) + 'だけ', set: [i] }))];
+}
+function updHold() {
+  if (!P || !P.holdBtn) return;
+  const o = holdOptions()[P.holdIdx] || holdOptions()[0];
+  P.runners.forEach((r, i) => { r.held = o.set.includes(i); });
+  P.holdBtn.textContent = '🔁 リピート：' + o.label;
+  P.holdBtn.classList.toggle('on', o.set.length > 0);
+}
 function applyAudio() {
   const c = P.c;
   P.runners.forEach(r => {
     if (!(r instanceof VideoRunner)) return;
     const on = c.pattern !== 'vid+vid' || c.audio === 'both' || c.audio === r.key;
     r.v.muted = !on;
+    if (on) r.v.removeAttribute('muted'); else r.v.setAttribute('muted', '');
   });
 }
 function updateTitle() {
@@ -946,7 +971,8 @@ function updateTitle() {
 }
 function setPlaying(on) {
   P.playing = on;
-  P.runners.forEach(r => on ? r.play() : r.pause());
+  const order = [...P.runners].sort((a, b) => (b.v && b.v.muted ? 1 : 0) - (a.v && a.v.muted ? 1 : 0));
+  order.forEach(r => on ? r.play() : r.pause());
   P.playBtn.textContent = on ? '⏸' : '▶︎';
   showControls();
 }
@@ -986,12 +1012,13 @@ function buildControls() {
     row2.append(P.layoutBtn);
   }
   if (c.pattern === 'vid+vid') row2.append(h('select', { class: 'psel', onchange: e => { c.audio = e.target.value; applyAudio(); saveConfig(); } },
-    [['V1', '音声：動画1'], ['V2', '音声：動画2'], ['both', '音声：両方']].map(([v, l]) => h('option', { value: v, selected: c.audio === v }, l))));
+    [['V1', '音声：動画1'], ['V2', '音声：動画2']].map(([v, l]) => h('option', { value: v, selected: c.audio === v }, l))));
   P.fitBtn = h('button', { class: 'pbtn', onclick: () => { c.fit = { contain: 'cover', cover: 'fill', fill: 'contain' }[c.fit || 'contain']; applyLayout(); saveConfig(); } });
   P.holdBtn = h('button', { class: 'pbtn', onclick: () => {
-    P.hold = !P.hold; applyLayout();
+    P.holdIdx = (P.holdIdx + 1) % holdOptions().length; updHold();
     P.runners.forEach(r => { if (r instanceof ImageRunner) r.resetTimer(); });
-    toast(P.hold ? '今の動画・画像をくり返します' : '通常の順番に戻しました');
+    const o = holdOptions()[P.holdIdx];
+    toast(o.set.length ? `「${o.label}」を今のままくり返します` : '通常の順番に戻しました');
   } });
   const row3 = h('div', { class: 'pc-row' }, P.holdBtn, P.fitBtn);
   if (two) {
