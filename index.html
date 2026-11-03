@@ -836,7 +836,7 @@ function renderHome() {
       tile('library', '📁', '保存庫', '動画・画像をフォルダで管理'),
       tile('play', '▶️', '再生', 'ループ・ランダム・2画面'),
       tile('sets', '⭐', 'セット', 'お気に入りの組み合わせ'),
-      tile('settings', '⚙️', '設定', 'ロック・使い方ガイド')));
+      tile('settings', '⚙️', '設定', 'ロック・容量')));
 }
 function videoInfo(blob) {
   return new Promise(res => {
@@ -1058,34 +1058,6 @@ function renderSettings() {
   root.append(card);
   root.append(h('div', { class: 'note' }, h('span', {}, '⚠️'),
     h('span', {}, 'パスコードを忘れるとアプリを開けなくなります。ロックはアプリの入口の鍵で、動画ファイル自体は暗号化されません。')));
-  const guide = (title, lines) => h('details', { class: 'guide' }, h('summary', {}, title), h('ol', {}, lines.map(l => h('li', {}, l))));
-  root.append(h('div', { class: 'sec-title' }, '使い方ガイド：画面収録'),
-    guide('🎥 画面収録ボタンを用意する', [
-      '画面の右上から下にスワイプして、コントロールセンターを開く',
-      '左上の「＋」をタップ →「コントロールを追加」',
-      '一覧から「画面収録」をタップすると追加されます',
-      '（古いiOSの場合：「設定」→「コントロールセンター」→「画面収録」の「＋」）']),
-    guide('👆 背中を2回タップして素早く開く', [
-      '「設定」アプリ →「アクセシビリティ」→「タッチ」',
-      'いちばん下の「背面タップ」→「ダブルタップ」',
-      '「コントロールセンター」を選ぶ',
-      'iPhoneの背中（カメラの下あたり）を指で2回トントンすると、コントロールセンターが開きます',
-      'そのまま「画面収録」ボタンをタップすると、3秒後に録画が始まります',
-      '厚いケースだと反応しにくいことがあります。iPhone 8以降で使えます']),
-    guide('⏹ 録画を止める・保存先', [
-      '画面上の赤い表示（時計の部分）をタップ →「停止」',
-      '録画は「写真」アプリに保存されます',
-      '写真アプリで動画を開き「編集」を押すと、前後をカットできます']),
-    guide('🔊 音について', [
-      '消音モード（マナーモード）はオフにしてください。オンだと多くのゲームは音を止めるため、録画にも音が入りません',
-      'iPhoneの音量は録画の音の大きさにほぼ関係ありません。小さくしても大丈夫です',
-      'ゲーム内のBGM・効果音の設定は録画に反映されます',
-      '画面収録ボタンを長押しすると、マイクのオン／オフを選べます（普段はオフのままでOK）']),
-    guide('📥 このアプリに取り込む', [
-      '「保存庫」で入れたいフォルダを開き、「＋ 追加」をタップ',
-      '写真ライブラリから録画した動画を選ぶ',
-      'Macの動画は、AirDropでiPhoneに送ってから「ファイルを選択」で選べます',
-      '取り込んだあと写真アプリ側を消しても、このアプリには残ります']));
   root.append(h('div', { class: 'sec-title' }, 'このアプリについて'));
   const usage = h('div', { class: 'small muted', style: 'margin-top:8px' });
   root.append(h('div', { class: 'card' },
@@ -1653,7 +1625,7 @@ function closePlayer() {
 /* ===== 起動 ===== */
 function renderAll() { if (!S.ready) return; renderHome(); renderLibrary(); renderPlay(); renderSets(); renderSettings(); }
 function startApp() { S.ready = true; renderAll(); }
-const APP_VERSION = 'v6';
+const APP_VERSION = 'v7';
 if ('serviceWorker' in navigator) {
   const hadController = !!navigator.serviceWorker.controller;
   navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then(r => r.update()).catch(() => {});
