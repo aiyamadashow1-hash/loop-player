@@ -214,6 +214,51 @@ textarea.inp{resize:vertical}
   .pbtn,.psel{min-height:40px}
   .ed-video{max-height:58vh}
 }
+
+.add-row{display:flex;gap:10px;margin-top:8px}
+.add-row .add-btn{flex:1;min-height:52px;font-size:16px;margin-top:0}
+.search{margin-top:12px;-webkit-appearance:none;appearance:none}
+.album-chips{flex-wrap:nowrap;overflow-x:auto;margin-top:12px;padding-bottom:4px;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+.album-chips::-webkit-scrollbar{display:none}
+.album-chips .chip{flex:none}
+.chip.tag.ghost{background:transparent;border:1.5px dashed var(--line);color:var(--muted)}
+.lib-tools{display:flex;gap:8px;align-items:center;margin:12px 0}
+.lib-tools .seg{flex:1}
+.mcard{position:relative}
+.mcard.on{outline:3px solid var(--accent);outline-offset:-3px}
+.mthumb .check{left:6px;top:6px;right:auto}
+.mcard.on .check{background:var(--accent);color:var(--accent-text)}
+.fav{position:absolute;right:7px;top:3px;color:var(--loop);font-size:18px;text-shadow:0 1px 3px rgba(0,0,0,.7)}
+body.selecting main{padding-bottom:calc(190px + env(safe-area-inset-bottom,0px))}
+.selbar{position:fixed;left:8px;right:8px;bottom:calc(66px + env(safe-area-inset-bottom,0px));z-index:30;background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:10px;box-shadow:0 6px 24px rgba(0,0,0,.25);display:flex;flex-wrap:wrap;align-items:center;gap:8px;max-width:744px;margin:0 auto}
+.selbar-n{font-weight:800;flex:1}
+.selbar-btns{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;width:100%}
+.sbtn{min-height:46px;border-radius:10px;background:var(--surface-2);font-size:12px;font-weight:700;padding:0 2px}
+.sbtn.danger{color:var(--danger)}
+.sbtn:disabled{opacity:.4}
+#imgsheet{z-index:58}
+#viewer{position:fixed;inset:0;z-index:55;background:var(--player-bg);color:var(--player-fg);display:flex;flex-direction:column;
+  padding:env(safe-area-inset-top,0px) env(safe-area-inset-right,0px) env(safe-area-inset-bottom,0px) env(safe-area-inset-left,0px)}
+.vw-top,.vw-bottom{display:flex;align-items:center;gap:6px;padding:8px 10px}
+.vw-bottom .pbtn{flex:1;min-width:0;padding:0 6px;font-size:13px}
+.vw-stage{flex:1;min-height:0;display:flex;align-items:center;justify-content:center;overflow:hidden;touch-action:pan-y}
+.vw-media{width:100%;height:100%;object-fit:contain;display:block}
+.vw-count{font-size:12px;opacity:.7;text-align:center;padding:0 0 6px}
+#lockscreen{position:fixed;inset:0;z-index:100;background:var(--bg);display:flex;align-items:center;justify-content:center;overflow-y:auto;
+  padding:env(safe-area-inset-top,0px) env(safe-area-inset-right,0px) env(safe-area-inset-bottom,0px) env(safe-area-inset-left,0px)}
+.lock-box{width:100%;max-width:340px;display:flex;flex-direction:column;align-items:center;gap:14px;padding:20px}
+.lock-logo{width:76px;height:76px;border-radius:18px;object-fit:cover}
+.lock-title{font-size:22px;font-weight:800}
+.lock-msg{color:var(--muted);font-size:14px;text-align:center;min-height:20px}
+.pin-dots{display:flex;gap:14px;justify-content:center;margin:8px 0}
+.pin-dots .dot{width:14px;height:14px;border-radius:50%;border:2px solid var(--text)}
+.pin-dots .dot.on{background:var(--text)}
+.pin-dots.shake{animation:shake .35s}
+@keyframes shake{25%{transform:translateX(-8px)}75%{transform:translateX(8px)}}
+.pinpad{display:grid;grid-template-columns:repeat(3,72px);gap:12px;justify-content:center}
+.pkey{width:72px;height:72px;border-radius:50%;background:var(--surface-2);font-size:26px;font-weight:600}
+.dlg .pinpad{grid-template-columns:repeat(3,62px);gap:10px;margin-top:6px}
+.dlg .pkey{width:62px;height:62px;font-size:22px}
 @media (prefers-reduced-motion:reduce){.tapfx.show{animation:none;opacity:1}}
 </style>
 </head>
@@ -223,16 +268,20 @@ textarea.inp{resize:vertical}
   <section id="tab-library"></section>
   <section id="tab-play" hidden></section>
   <section id="tab-sets" hidden></section>
+  <section id="tab-settings" hidden></section>
 </main>
 <nav class="tabbar">
   <button data-tab="library" class="on"><span class="ti">🗂️</span>ライブラリ</button>
   <button data-tab="play"><span class="ti">▶️</span>再生</button>
   <button data-tab="sets"><span class="ti">⭐</span>セット</button>
+  <button data-tab="settings"><span class="ti">⚙️</span>設定</button>
 </nav>
 <div id="editor" class="overlay" hidden></div>
 <div id="imgsheet" class="overlay" hidden></div>
 <div id="picker" class="sheet" hidden></div>
 <div id="player" hidden></div>
+<div id="viewer" hidden></div>
+<div id="lockscreen" hidden></div>
 <div id="toast" class="toast"></div>
 
 <script>
@@ -326,7 +375,8 @@ function seg(opts, cur, on) {
   });
   return w;
 }
-const lockBody = on => { document.body.style.overflow = on ? 'hidden' : ''; };
+let lockN = 0;
+const lockBody = on => { lockN = Math.max(0, lockN + (on ? 1 : -1)); document.body.style.overflow = lockN ? 'hidden' : ''; };
 const parseTags = s => [...new Set(String(s || '').split(/[,、，\s]+/).map(x => x.replace(/^#/, '').trim()).filter(Boolean))];
 
 /* ===== 保存（このiPhoneの中だけ） ===== */
@@ -386,7 +436,7 @@ function mergeConfig(c) {
   if (c.audio !== 'V2') c.audio = 'V1';
   return c;
 }
-const S = { media: [], clips: [], sets: [], urls: new Map(), thumbs: new Map(), config: defaultConfig(), libFilter: 'all' };
+const S = { media: [], clips: [], sets: [], urls: new Map(), thumbs: new Map(), config: defaultConfig(), albums: [], ready: false, picking: false };
 const findMedia = id => S.media.find(m => m.id === id);
 function urlOf(m) { if (!S.urls.has(m.id)) S.urls.set(m.id, URL.createObjectURL(m.blob)); return S.urls.get(m.id); }
 function thumbOf(m) {
@@ -407,42 +457,252 @@ const saveConfig = () => DB.set('config', clone(S.config)).catch(() => {});
 /* ===== タブ ===== */
 function switchTab(t) {
   document.querySelectorAll('.tabbar button').forEach(b => b.classList.toggle('on', b.dataset.tab === t));
-  ['library', 'play', 'sets'].forEach(x => { $('#tab-' + x).hidden = x !== t; });
+  ['library', 'play', 'sets', 'settings'].forEach(x => { $('#tab-' + x).hidden = x !== t; });
+  if (t !== 'library' && L.selecting) { L.selecting = false; L.sel.clear(); renderLibrary(); }
   window.scrollTo(0, 0);
 }
 document.querySelectorAll('.tabbar button').forEach(b => b.addEventListener('click', () => switchTab(b.dataset.tab)));
 
 /* ===== ライブラリ ===== */
+const L = { filter: 'all', album: 'all', q: '', sort: 'new', selecting: false, sel: new Set() };
+const saveAlbums = () => DB.set('albums', S.albums).catch(() => {});
+const inAlbum = (m, a) => a === 'all' || (a === 'fav' ? !!m.fav : (m.albums || []).includes(a));
+function mediaMatches(m) {
+  if (L.filter !== 'all' && m.type !== L.filter) return false;
+  if (!inAlbum(m, L.album)) return false;
+  const q = L.q.trim().toLowerCase();
+  if (q) {
+    const hay = [m.name, ...(m.tags || []), m.memo || '',
+      ...S.clips.filter(c => c.mediaId === m.id).flatMap(c => [c.name, ...(c.tags || []), c.memo || ''])].join(' ').toLowerCase();
+    if (!q.split(/\s+/).every(w => hay.includes(w))) return false;
+  }
+  return true;
+}
+function libList() {
+  const arr = S.media.filter(mediaMatches);
+  if (L.sort === 'new') arr.sort((a, b) => b.added - a.added);
+  else if (L.sort === 'old') arr.sort((a, b) => a.added - b.added);
+  else arr.sort((a, b) => String(a.name).localeCompare(String(b.name), 'ja', { numeric: true }));
+  return arr;
+}
+function fileInput(capture) {
+  const input = h('input', { type: 'file', accept: 'video/*,image/*', multiple: !capture });
+  if (capture) input.setAttribute('capture', 'environment');
+  input.addEventListener('click', () => { S.picking = true; });
+  input.addEventListener('change', () => { const f = [...input.files]; input.value = ''; setTimeout(() => { S.picking = false; }, 1500); if (f.length) importFiles(f); });
+  input.addEventListener('cancel', () => { S.picking = false; });
+  return input;
+}
 function renderLibrary() {
+  if (!S.ready) return;
   const root = $('#tab-library'); root.innerHTML = '';
-  root.append(h('div', { class: 'note', style: 'margin-top:8px' }, h('span', {}, '🔒'),
-    h('span', {}, h('b', {}, '動画・画像はこのiPhoneの中だけに保存されます。'), 'ネットには送信されません。')));
-  const input = h('input', { type: 'file', accept: 'video/*,image/*', multiple: true });
-  input.addEventListener('change', () => { const f = [...input.files]; input.value = ''; if (f.length) importFiles(f); });
-  root.append(h('label', { class: 'btn primary big add-btn' }, '＋ 動画・画像を追加', input));
-  const usage = h('div', { class: 'hint', style: 'text-align:center' });
-  root.append(usage);
-  root.append(h('div', { class: 'hint', style: 'text-align:center' }, 'アプリの版：' + APP_VERSION));
-  if (navigator.storage && navigator.storage.estimate) navigator.storage.estimate().then(e => {
-    usage.textContent = `保存中の容量：約${Math.round((e.usage || 0) / 1048576)}MB`;
-  }).catch(() => {});
-
-  root.append(h('div', { style: 'margin:18px 0 12px' }, seg([['all', 'すべて'], ['video', '動画'], ['image', '画像']], S.libFilter, v => { S.libFilter = v; renderLibrary(); })));
-  const list = S.media.filter(m => S.libFilter === 'all' || m.type === S.libFilter);
+  root.append(h('div', { class: 'add-row' },
+    h('label', { class: 'btn primary add-btn' }, '＋ 追加', fileInput(false)),
+    h('label', { class: 'btn add-btn' }, '📷 撮影', fileInput(true))));
+  const search = h('input', { class: 'inp search', type: 'search', placeholder: '🔍 名前・タグ・メモで検索', value: L.q });
+  search.addEventListener('input', () => { L.q = search.value; renderGrid(); });
+  root.append(search);
+  const chips = h('div', { class: 'chips album-chips' });
+  const chip = (id, label) => h('button', { class: 'chip tag' + (L.album === id ? ' on' : ''), onclick: () => { L.album = id; renderLibrary(); } }, label);
+  chips.append(chip('all', 'すべて'), chip('fav', '★ お気に入り'));
+  S.albums.forEach(a => chips.append(chip(a.id, a.name)));
+  chips.append(h('button', { class: 'chip tag ghost', onclick: manageAlbums }, '＋ アルバム'));
+  root.append(chips);
+  root.append(h('div', { class: 'lib-tools' },
+    seg([['all', 'すべて'], ['video', '動画'], ['image', '画像']], L.filter, v => { L.filter = v; renderGrid(); }),
+    h('select', { class: 'sel', onchange: e => { L.sort = e.target.value; renderGrid(); } },
+      [['new', '新しい順'], ['old', '古い順'], ['name', '名前順']].map(([v, l]) => h('option', { value: v, selected: L.sort === v }, l))),
+    h('button', { class: 'btn sm' + (L.selecting ? ' primary' : ''), onclick: () => { L.selecting = !L.selecting; L.sel.clear(); renderLibrary(); } }, L.selecting ? '完了' : '選択')));
+  root.append(h('div', { id: 'libgrid' }));
+  renderGrid(); renderSelBar();
+}
+function renderGrid() {
+  const grid = $('#libgrid'); if (!grid) return; grid.innerHTML = '';
+  const list = libList();
   if (!list.length) {
-    root.append(h('div', { class: 'empty' }, S.media.length ? 'この種類はまだありません' : '「＋ 動画・画像を追加」から、写真アプリやファイルアプリの動画・画像を選んでください'));
+    grid.append(h('div', { class: 'empty' }, S.media.length ? '見つかりませんでした' : '「＋ 追加」で写真アプリやファイルアプリから取り込むか、「📷 撮影」でこのアプリに直接撮影できます'));
     return;
   }
+  grid.append(h('div', { class: 'small muted', style: 'margin:0 4px 8px' }, `${list.length}件`));
   const g = h('div', { class: 'media-grid' });
-  list.forEach(m => {
+  list.forEach((m, i) => {
     const th = thumbOf(m), nClips = S.clips.filter(c => c.mediaId === m.id).length;
-    g.append(h('button', { class: 'mcard', onclick: () => m.type === 'video' ? openEditor(m) : openImageSheet(m) },
+    const card = h('button', { class: 'mcard' + (L.sel.has(m.id) ? ' on' : '') },
       h('div', { class: 'mthumb' }, th ? h('img', { src: th, alt: '' }) : (m.type === 'video' ? '🎬' : '🖼️'),
         m.type === 'video' ? h('span', { class: 'badge' }, fmtShort(m.duration)) : null,
-        nClips ? h('span', { class: 'badge left' }, `区間 ${nClips}`) : null),
-      h('div', { class: 'mname' }, m.name)));
+        nClips ? h('span', { class: 'badge left' }, `区間 ${nClips}`) : null,
+        m.fav ? h('span', { class: 'fav' }, '★') : null,
+        L.selecting ? h('span', { class: 'check' }, '✓') : null),
+      h('div', { class: 'mname' }, m.name));
+    card.onclick = () => {
+      if (L.selecting) { L.sel.has(m.id) ? L.sel.delete(m.id) : L.sel.add(m.id); card.classList.toggle('on', L.sel.has(m.id)); renderSelBar(); }
+      else openViewer(list, i);
+    };
+    g.append(card);
   });
-  root.append(g);
+  grid.append(g);
+}
+function renderSelBar() {
+  let bar = $('#selbar');
+  document.body.classList.toggle('selecting', L.selecting);
+  if (!L.selecting) { if (bar) bar.remove(); return; }
+  if (!bar) { bar = h('div', { id: 'selbar', class: 'selbar' }); document.body.append(bar); }
+  bar.innerHTML = '';
+  const n = L.sel.size, items = () => [...L.sel].map(findMedia).filter(Boolean);
+  bar.append(h('div', { class: 'selbar-n' }, `${n}件を選択中`),
+    h('button', { class: 'btn sm ghost', onclick: () => {
+      const all = libList().map(m => m.id), on = all.every(id => L.sel.has(id));
+      all.forEach(id => on ? L.sel.delete(id) : L.sel.add(id)); renderGrid(); renderSelBar();
+    } }, 'すべて'),
+    h('div', { class: 'selbar-btns' },
+      h('button', { class: 'sbtn', disabled: !n, onclick: () => pickAlbums(items()) }, '📁 アルバム'),
+      h('button', { class: 'sbtn', disabled: !n, onclick: () => toggleFav(items()) }, '★ お気に入り'),
+      h('button', { class: 'sbtn', disabled: !n, onclick: () => shareMedia(items()) }, '⤴︎ 写真に保存'),
+      h('button', { class: 'sbtn danger', disabled: !n, onclick: () => deleteMany(items()) }, '🗑 削除')));
+}
+async function toggleFav(items) {
+  const on = !items.every(m => m.fav);
+  for (const m of items) { m.fav = on; await DB.put('media', m).catch(() => {}); }
+  toast(on ? 'お気に入りにしました' : 'お気に入りを外しました'); renderGrid();
+}
+function extOf(m) {
+  const n = m.blob && m.blob.name ? m.blob.name.split('.').pop().toLowerCase() : '';
+  if (n && n.length <= 5) return n;
+  const t = (m.blob && m.blob.type) || '';
+  return { 'video/quicktime': 'mov', 'video/mp4': 'mp4', 'image/jpeg': 'jpg', 'image/png': 'png', 'image/gif': 'gif', 'image/webp': 'webp', 'image/heic': 'heic' }[t] || (m.type === 'video' ? 'mov' : 'jpg');
+}
+function shareMedia(items) {
+  const files = items.map(m => {
+    const type = (m.blob && m.blob.type) || (m.type === 'video' ? 'video/quicktime' : 'image/jpeg');
+    return new File([m.blob], String(m.name).replace(/[\\/:*?"<>|]/g, '_') + '.' + extOf(m), { type });
+  });
+  if (!navigator.canShare || !navigator.canShare({ files })) { toast('この端末では写真アプリへの保存ができません', 3000); return; }
+  S.picking = true;
+  navigator.share({ files }).then(() => toast('「画像を保存」「ビデオを保存」を選ぶと写真アプリに入ります', 3000))
+    .catch(e => { if (e && e.name !== 'AbortError') toast('保存できませんでした'); })
+    .finally(() => setTimeout(() => { S.picking = false; }, 1500));
+}
+function openSheet(title, render) {
+  const ov = $('#imgsheet'); ov.innerHTML = ''; ov.hidden = false; lockBody(true);
+  const body = h('div', { class: 'ov-body' });
+  const close = () => { ov.hidden = true; ov.innerHTML = ''; lockBody(false); };
+  ov.append(h('div', { class: 'ov-head' }, h('button', { class: 'btn ghost sm', onclick: close }, '閉じる'), h('div', { class: 'ov-title' }, title), h('span', { style: 'width:64px' })), body);
+  const re = () => { body.innerHTML = ''; render(body, close, re); };
+  re();
+}
+async function newAlbum() {
+  const n = await dialog({ title: '新しいアルバム', input: '', okText: '作成' });
+  if (!n) return null;
+  const a = { id: uid(), name: n }; S.albums.push(a); saveAlbums(); return a;
+}
+function manageAlbums() {
+  openSheet('アルバム', (body, close, re) => {
+    body.append(h('button', { class: 'btn primary wide', onclick: async () => { if (await newAlbum()) { re(); renderLibrary(); } } }, '＋ 新しいアルバム'));
+    if (!S.albums.length) body.append(h('div', { class: 'empty' }, 'アルバムで動画・画像を分類できます。1つの動画を複数のアルバムに入れることもできます。'));
+    body.append(h('div', { style: 'height:12px' }));
+    S.albums.forEach(a => {
+      const cnt = S.media.filter(m => (m.albums || []).includes(a.id)).length;
+      body.append(h('div', { class: 'clip-row' },
+        h('button', { class: 'clip-main', onclick: () => { L.album = a.id; close(); renderLibrary(); } }, h('b', {}, a.name), h('small', {}, `${cnt}件`)),
+        h('button', { class: 'icon-btn', 'aria-label': '名前を変更', onclick: async () => {
+          const n = await dialog({ title: 'アルバム名を変更', input: a.name, okText: '保存' });
+          if (n) { a.name = n; saveAlbums(); re(); renderLibrary(); }
+        } }, '✎'),
+        h('button', { class: 'icon-btn', 'aria-label': '削除', onclick: async () => {
+          if (!await dialog({ title: 'アルバムを削除しますか？', text: `「${a.name}」を削除します。中の動画・画像は消えません。`, okText: '削除', danger: true })) return;
+          S.albums = S.albums.filter(x => x.id !== a.id); saveAlbums();
+          for (const m of S.media) if ((m.albums || []).includes(a.id)) { m.albums = m.albums.filter(x => x !== a.id); await DB.put('media', m).catch(() => {}); }
+          if (L.album === a.id) L.album = 'all';
+          re(); renderLibrary();
+        } }, '🗑')));
+    });
+  });
+}
+function pickAlbums(items) {
+  openSheet('アルバムに入れる', (body, close, re) => {
+    body.append(h('div', { class: 'small muted', style: 'margin-bottom:10px' }, `${items.length}件をタップしたアルバムに入れます（もう一度タップで外す）`));
+    S.albums.forEach(a => {
+      const all = items.every(m => (m.albums || []).includes(a.id));
+      body.append(h('button', { class: 'pick-row' + (all ? ' on' : ''), onclick: async () => {
+        for (const m of items) {
+          const s = new Set(m.albums || []); all ? s.delete(a.id) : s.add(a.id); m.albums = [...s];
+          await DB.put('media', m).catch(() => {});
+        }
+        re(); renderLibrary();
+      } }, h('span', { class: 'check' }, '✓'), h('span', { class: 'pr-main' }, h('b', {}, a.name))));
+    });
+    body.append(h('button', { class: 'btn wide', style: 'margin-top:8px', onclick: async () => {
+      const a = await newAlbum(); if (!a) return;
+      for (const m of items) { m.albums = [...new Set([...(m.albums || []), a.id])]; await DB.put('media', m).catch(() => {}); }
+      re(); renderLibrary();
+    } }, '＋ 新しいアルバムを作って入れる'));
+  });
+}
+function openInfo(m, after) {
+  openSheet('情報・編集', (body, close) => {
+    const name = h('input', { class: 'inp', value: m.name });
+    const tags = h('input', { class: 'inp', placeholder: 'タグ（例：練習用, 完成）', value: (m.tags || []).join(', ') });
+    const memo = h('textarea', { class: 'inp', rows: '3', placeholder: 'メモ' }); memo.value = m.memo || '';
+    const sel = new Set(m.albums || []);
+    const chips = h('div', { class: 'chips' }, S.albums.map(a => {
+      const b = h('button', { class: 'chip tag' + (sel.has(a.id) ? ' on' : '') }, a.name);
+      b.onclick = () => { sel.has(a.id) ? sel.delete(a.id) : sel.add(a.id); b.classList.toggle('on', sel.has(a.id)); };
+      return b;
+    }));
+    const size = m.blob && m.blob.size ? (m.blob.size / 1048576).toFixed(1) + 'MB' : '';
+    body.append(
+      h('div', { class: 'small muted' }, [m.type === 'video' ? '動画 ' + fmtShort(m.duration) : '画像', size, '追加日 ' + new Date(m.added).toLocaleDateString('ja-JP')].filter(Boolean).join('／')),
+      h('div', { class: 'sec-title' }, '名前'), name,
+      h('div', { class: 'sec-title' }, 'アルバム'),
+      S.albums.length ? chips : h('div', { class: 'small muted' }, 'アルバムはまだありません（ライブラリの「＋ アルバム」から作れます）'),
+      h('div', { class: 'sec-title' }, 'タグ・メモ'), tags, memo,
+      h('button', { class: 'btn primary wide', style: 'margin-top:16px', onclick: async () => {
+        m.name = name.value.trim() || m.name; m.tags = parseTags(tags.value); m.memo = memo.value.trim(); m.albums = [...sel];
+        await DB.put('media', m).catch(() => {}); toast('保存しました'); close(); if (after) after(); renderGrid();
+      } }, '保存'));
+  });
+}
+function openViewer(list, idx) {
+  list = list.slice();
+  const ov = $('#viewer'); ov.innerHTML = ''; ov.hidden = false; lockBody(true);
+  let i = idx, vid = null;
+  const stage = h('div', { class: 'vw-stage' });
+  const title = h('div', { class: 'pc-title' });
+  const count = h('div', { class: 'vw-count' });
+  const stopVid = () => { if (vid) { vid.pause(); vid.removeAttribute('src'); vid.load(); vid = null; } };
+  const close = () => { stopVid(); ov.hidden = true; ov.innerHTML = ''; lockBody(false); renderGrid(); };
+  const favBtn = h('button', { class: 'pbtn', onclick: async () => { const m = list[i]; m.fav = !m.fav; await DB.put('media', m).catch(() => {}); show(false); } });
+  const clipBtn = h('button', { class: 'pbtn', onclick: () => { const m = list[i]; close(); openEditor(m); } }, '✂︎ 区間');
+  const show = (reload = true) => {
+    const m = list[i]; if (!m) { close(); return; }
+    if (reload) {
+      stopVid(); stage.innerHTML = '';
+      if (m.type === 'video') { vid = h('video', { class: 'vw-media', controls: true, playsinline: true, preload: 'metadata' }); vid.src = urlOf(m); stage.append(vid); }
+      else stage.append(h('img', { class: 'vw-media', src: urlOf(m), alt: '' }));
+    }
+    title.textContent = m.name; favBtn.textContent = m.fav ? '★' : '☆'; favBtn.classList.toggle('on', !!m.fav);
+    count.textContent = `${i + 1} / ${list.length}`; clipBtn.hidden = m.type !== 'video';
+  };
+  const go = d => { const n = i + d; if (n < 0 || n >= list.length) return; i = n; show(); };
+  let sx = 0, sy = 0, ok = false;
+  stage.addEventListener('touchstart', e => { const t = e.touches[0], r = stage.getBoundingClientRect(); sx = t.clientX; sy = t.clientY; ok = e.touches.length === 1 && sy < r.bottom - 90; }, { passive: true });
+  stage.addEventListener('touchend', e => { if (!ok) return; const t = e.changedTouches[0], dx = t.clientX - sx, dy = t.clientY - sy; if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy) * 1.5) go(dx < 0 ? 1 : -1); }, { passive: true });
+  ov.append(
+    h('div', { class: 'vw-top' }, h('button', { class: 'pbtn', onclick: close }, '✕ 閉じる'), title, favBtn),
+    stage,
+    h('div', { class: 'vw-bottom' },
+      h('button', { class: 'pbtn', 'aria-label': '前へ', onclick: () => go(-1) }, '‹'),
+      h('button', { class: 'pbtn', onclick: () => openInfo(list[i], () => show(false)) }, 'ℹ︎ 情報'),
+      h('button', { class: 'pbtn', onclick: () => shareMedia([list[i]]) }, '⤴︎ 保存'),
+      clipBtn,
+      h('button', { class: 'pbtn', 'aria-label': '削除', onclick: async () => {
+        const m = list[i]; if (!await deleteMedia(m)) return;
+        list.splice(i, 1); if (!list.length) { close(); return; }
+        i = Math.min(i, list.length - 1); show();
+      } }, '🗑'),
+      h('button', { class: 'pbtn', 'aria-label': '次へ', onclick: () => go(1) }, '›')),
+    count);
+  show();
 }
 function videoInfo(blob) {
   return new Promise(res => {
@@ -474,6 +734,7 @@ function videoInfo(blob) {
 }
 async function importFiles(files) {
   let ok = 0;
+  const album = L.album !== 'all' && L.album !== 'fav' ? L.album : null;
   for (let i = 0; i < files.length; i++) {
     const f = files[i];
     const ext = (f.name.split('.').pop() || '').toLowerCase();
@@ -481,7 +742,8 @@ async function importFiles(files) {
       : f.type.startsWith('image') || ['jpg', 'jpeg', 'png', 'gif', 'webp', 'heic'].includes(ext) ? 'image' : null;
     if (!type) continue;
     toast(`読み込み中… ${i + 1} / ${files.length}`, 60000);
-    const m = { id: uid(), name: f.name.replace(/\.[^.]+$/, '') || (type === 'video' ? '動画' : '画像'), type, blob: f, added: Date.now() };
+    const m = { id: uid(), name: f.name.replace(/\.[^.]+$/, '') || (type === 'video' ? '動画' : '画像'), type, blob: f, added: Date.now() + i,
+      albums: album ? [album] : [], fav: L.album === 'fav', tags: [], memo: '' };
     if (type === 'video') { const info = await videoInfo(f); m.duration = info.duration; m.thumb = info.thumb; }
     try { await DB.put('media', m); S.media.unshift(m); ok++; }
     catch (e) { toast('保存できませんでした。iPhoneの空き容量を確認してください', 4000); renderAll(); return; }
@@ -490,32 +752,188 @@ async function importFiles(files) {
   toast(ok ? `${ok}件を追加しました` : '追加できるファイルがありませんでした');
   renderAll();
 }
-async function deleteMedia(m) {
-  const ok = await dialog({ title: '削除しますか？', text: `「${m.name}」と、その区間メモを削除します。写真アプリの元データは消えません。`, okText: '削除', danger: true });
-  if (!ok) return false;
+async function removeMedia(m) {
   await DB.del('media', m.id).catch(() => {});
   for (const c of S.clips.filter(c => c.mediaId === m.id)) await DB.del('clips', c.id).catch(() => {});
   S.clips = S.clips.filter(c => c.mediaId !== m.id);
   S.media = S.media.filter(x => x.id !== m.id);
+  L.sel.delete(m.id);
   if (S.urls.has(m.id)) { URL.revokeObjectURL(S.urls.get(m.id)); S.urls.delete(m.id); }
   if (S.thumbs.has(m.id)) { URL.revokeObjectURL(S.thumbs.get(m.id)); S.thumbs.delete(m.id); }
+}
+function afterRemove() {
   for (const k in S.config.sources) S.config.sources[k].items = validItems(k, S.config.sources[k].items);
-  saveConfig(); toast('削除しました'); renderAll();
+  saveConfig(); renderAll();
+}
+async function deleteMedia(m) {
+  const ok = await dialog({ title: '削除しますか？', text: `「${m.name}」をこのアプリから削除します（区間メモも消えます）。写真アプリに保存してあるものは消えません。`, okText: '削除', danger: true });
+  if (!ok) return false;
+  await removeMedia(m); afterRemove(); toast('削除しました');
   return true;
 }
-function openImageSheet(m) {
-  const ov = $('#imgsheet'); ov.innerHTML = ''; ov.hidden = false; lockBody(true);
-  const close = () => { ov.hidden = true; ov.innerHTML = ''; lockBody(false); renderAll(); };
-  const name = h('input', { class: 'inp', value: m.name });
-  ov.append(h('div', { class: 'ov-head' },
-    h('button', { class: 'btn ghost sm', onclick: close }, '閉じる'), h('div', { class: 'ov-title' }, '画像'),
-    h('button', { class: 'btn sm', style: 'color:var(--danger)', onclick: async () => { if (await deleteMedia(m)) close(); } }, '削除')),
-    h('div', { class: 'ov-body' },
-      h('div', { class: 'ed-video-box' }, h('img', { src: urlOf(m), alt: '', style: 'max-height:60vh;object-fit:contain' })),
-      name,
-      h('button', { class: 'btn primary wide', style: 'margin-top:10px', onclick: async () => {
-        m.name = name.value.trim() || m.name; await DB.put('media', m).catch(() => {}); toast('名前を保存しました');
-      } }, '名前を保存')));
+async function deleteMany(items) {
+  const ok = await dialog({ title: `${items.length}件を削除しますか？`, text: 'このアプリから削除します。写真アプリに保存してあるものは消えません。', okText: '削除', danger: true });
+  if (!ok) return;
+  for (const m of items) await removeMedia(m);
+  afterRemove(); toast('削除しました');
+}
+
+/* ===== ロック ===== */
+const LOCK = { cfg: null, locked: false, hiddenAt: 0 };
+const b64 = buf => btoa(String.fromCharCode(...new Uint8Array(buf)));
+const unb64 = s => Uint8Array.from(atob(s), c => c.charCodeAt(0));
+const rnd = n => crypto.getRandomValues(new Uint8Array(n));
+async function hashPin(pin, salt) { return b64(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(salt + ':' + pin))); }
+const saveLock = () => DB.set('lock', LOCK.cfg).catch(() => {});
+function faceRegister() {
+  return navigator.credentials.create({ publicKey: {
+    challenge: rnd(32), rp: { name: 'ループプレイヤー' },
+    user: { id: rnd(16), name: 'loop-player', displayName: 'ループプレイヤー' },
+    pubKeyCredParams: [{ type: 'public-key', alg: -7 }, { type: 'public-key', alg: -257 }],
+    authenticatorSelection: { authenticatorAttachment: 'platform', userVerification: 'required', residentKey: 'preferred' },
+    timeout: 60000, attestation: 'none' } }).then(c => b64(c.rawId));
+}
+function faceVerify() {
+  return navigator.credentials.get({ publicKey: {
+    challenge: rnd(32), allowCredentials: [{ type: 'public-key', id: unb64(LOCK.cfg.credId), transports: ['internal'] }],
+    userVerification: 'required', timeout: 60000 } }).then(a => !!(new Uint8Array(a.response.authenticatorData)[32] & 0x04));
+}
+function pinPad(onDigit, onBack) {
+  const pad = h('div', { class: 'pinpad' });
+  ['1', '2', '3', '4', '5', '6', '7', '8', '9', '', '0', '⌫'].forEach(k => {
+    if (!k) { pad.append(h('span')); return; }
+    pad.append(h('button', { class: 'pkey', 'aria-label': k === '⌫' ? '1文字消す' : k, onclick: () => k === '⌫' ? onBack() : onDigit(k) }, k));
+  });
+  return pad;
+}
+function askPin(title, text) {
+  return new Promise(res => {
+    let pin = '';
+    const ov = h('div', { class: 'dlg-ov' }), dots = h('div', { class: 'pin-dots' });
+    const draw = () => { dots.innerHTML = ''; for (let k = 0; k < Math.max(4, pin.length); k++) dots.append(h('span', { class: 'dot' + (k < pin.length ? ' on' : '') })); };
+    ov.append(h('div', { class: 'dlg' },
+      h('div', { class: 'dlg-title' }, title), text ? h('p', { class: 'dlg-text' }, text) : null, dots,
+      pinPad(d => { if (pin.length < 6) { pin += d; draw(); } }, () => { pin = pin.slice(0, -1); draw(); }),
+      h('div', { class: 'dlg-btns' },
+        h('button', { class: 'btn ghost', onclick: () => { ov.remove(); res(null); } }, 'キャンセル'),
+        h('button', { class: 'btn primary', onclick: () => { if (pin.length < 4) { toast('4〜6桁で入力してください'); return; } ov.remove(); res(pin); } }, '決定'))));
+    document.body.append(ov); draw();
+  });
+}
+async function verifyPin() {
+  const p = await askPin('今のパスコード');
+  if (!p) return false;
+  if (await hashPin(p, LOCK.cfg.salt) !== LOCK.cfg.pinHash) { toast('パスコードが違います'); return false; }
+  return true;
+}
+function showLock() {
+  if (!LOCK.cfg || !LOCK.cfg.enabled || LOCK.locked) return;
+  LOCK.locked = true;
+  if (P && P.playing) setPlaying(false);
+  document.querySelectorAll('video').forEach(v => v.pause());
+  document.activeElement && document.activeElement.blur && document.activeElement.blur();
+  const ov = $('#lockscreen'); ov.innerHTML = ''; ov.hidden = false;
+  let pin = '';
+  const dots = h('div', { class: 'pin-dots' }), msg = h('div', { class: 'lock-msg' }, 'パスコードを入力');
+  const draw = () => { dots.innerHTML = ''; for (let k = 0; k < LOCK.cfg.pinLen; k++) dots.append(h('span', { class: 'dot' + (k < pin.length ? ' on' : '') })); };
+  const tryPin = async () => {
+    if (await hashPin(pin, LOCK.cfg.salt) === LOCK.cfg.pinHash) { unlock(); return; }
+    pin = ''; draw(); msg.textContent = 'パスコードが違います';
+    dots.classList.remove('shake'); void dots.offsetWidth; dots.classList.add('shake');
+  };
+  const face = LOCK.cfg.credId && window.PublicKeyCredential ? h('button', { class: 'btn primary big', onclick: () => {
+    faceVerify().then(ok => { if (ok) unlock(); else msg.textContent = '解除できませんでした'; })
+      .catch(() => { msg.textContent = 'Face IDで解除できませんでした。パスコードを入力してください'; });
+  } }, 'Face IDで解除') : null;
+  ov.append(h('div', { class: 'lock-box' },
+    h('img', { class: 'lock-logo', src: 'icon-180.png', alt: '' }), h('div', { class: 'lock-title' }, 'ロック中'),
+    face, msg, dots,
+    pinPad(d => { if (pin.length >= LOCK.cfg.pinLen) return; pin += d; draw(); if (pin.length === LOCK.cfg.pinLen) tryPin(); },
+      () => { pin = pin.slice(0, -1); draw(); })));
+  draw();
+}
+function unlock() {
+  LOCK.locked = false;
+  const ov = $('#lockscreen'); ov.hidden = true; ov.innerHTML = '';
+  if (!S.ready) startApp();
+}
+document.addEventListener('visibilitychange', () => {
+  if (!LOCK.cfg || !LOCK.cfg.enabled) return;
+  if (document.visibilityState === 'hidden') {
+    LOCK.hiddenAt = Date.now();
+    if (!S.picking && LOCK.cfg.relock === 'always') showLock();
+    return;
+  }
+  if (S.picking || LOCK.locked) return;
+  if (LOCK.cfg.relock === '5min' && Date.now() - LOCK.hiddenAt > 5 * 60 * 1000) showLock();
+});
+
+/* ===== 設定 ===== */
+async function setupLock() {
+  const p1 = await askPin('パスコードを決める', '4〜6桁の数字。忘れるとアプリを開けなくなるので注意してください');
+  if (!p1) return;
+  const p2 = await askPin('もう一度入力してください');
+  if (!p2) return;
+  if (p1 !== p2) { toast('パスコードが一致しませんでした'); return; }
+  const salt = b64(rnd(16));
+  LOCK.cfg = { enabled: true, salt, pinHash: await hashPin(p1, salt), pinLen: p1.length, credId: null, relock: 'always' };
+  saveLock(); renderSettings();
+  toast('ロックを設定しました。Face IDを使う場合は「使う」を押してください', 4000);
+}
+function addFace() {
+  if (!window.PublicKeyCredential) { toast('この端末ではFace IDを使えません'); return; }
+  faceRegister().then(id => { LOCK.cfg.credId = id; saveLock(); renderSettings(); toast('Face IDを設定しました'); })
+    .catch(() => toast('Face IDを設定できませんでした', 3000));
+}
+async function removeFace() {
+  if (!await verifyPin()) return;
+  LOCK.cfg.credId = null; saveLock(); renderSettings(); toast('Face IDを使わない設定にしました');
+}
+async function changePin() {
+  if (!await verifyPin()) return;
+  const p1 = await askPin('新しいパスコード', '4〜6桁の数字'); if (!p1) return;
+  const p2 = await askPin('もう一度入力してください'); if (!p2) return;
+  if (p1 !== p2) { toast('パスコードが一致しませんでした'); return; }
+  LOCK.cfg.salt = b64(rnd(16)); LOCK.cfg.pinHash = await hashPin(p1, LOCK.cfg.salt); LOCK.cfg.pinLen = p1.length;
+  saveLock(); toast('パスコードを変更しました');
+}
+async function disableLock() {
+  if (!await verifyPin()) return;
+  LOCK.cfg = { enabled: false }; saveLock(); renderSettings(); toast('ロックをオフにしました');
+}
+function renderSettings() {
+  if (!S.ready) return;
+  const root = $('#tab-settings'); root.innerHTML = '';
+  const c = LOCK.cfg;
+  root.append(h('div', { class: 'sec-title' }, 'ロック'));
+  const card = h('div', { class: 'card' });
+  if (!c || !c.enabled) {
+    card.append(h('div', { class: 'card-title' }, 'ロックはオフです'),
+      h('div', { class: 'small muted' }, 'オンにすると、アプリを開くときにFace IDまたはパスコードが必要になります。'),
+      h('button', { class: 'btn primary wide', style: 'margin-top:12px', onclick: setupLock }, 'ロックを設定する'));
+  } else {
+    card.append(h('div', { class: 'card-title' }, 'ロックはオンです'),
+      h('div', { class: 'set-row' }, h('span', {}, 'Face ID'),
+        c.credId ? h('button', { class: 'btn sm ghost', onclick: removeFace }, '使わない') : h('button', { class: 'btn sm primary', onclick: addFace }, '使う')),
+      h('div', { class: 'set-row' }, h('span', {}, '再ロック'), seg([['always', '戻るたび'], ['5min', '5分後'], ['launch', '起動時だけ']], c.relock, v => { c.relock = v; saveLock(); })),
+      h('div', { class: 'hint' }, '「戻るたび」：ほかのアプリに切り替えて戻ってきたときにロックします'),
+      h('div', { class: 'row-btns' },
+        h('button', { class: 'btn', onclick: changePin }, 'パスコード変更'),
+        h('button', { class: 'btn', style: 'color:var(--danger)', onclick: disableLock }, 'ロックをオフ')));
+  }
+  root.append(card);
+  root.append(h('div', { class: 'note' }, h('span', {}, '⚠️'),
+    h('span', {}, 'パスコードを忘れるとアプリを開けなくなります。ロックはアプリの入口の鍵で、動画ファイル自体は暗号化されません。')));
+  root.append(h('div', { class: 'sec-title' }, 'このアプリについて'));
+  const usage = h('div', { class: 'small muted', style: 'margin-top:8px' });
+  root.append(h('div', { class: 'card' },
+    h('div', { class: 'small' }, '🔒 動画・画像はこのiPhoneの中だけに保存され、ネットには送信されません。'),
+    h('div', { class: 'small muted', style: 'margin-top:8px' }, 'ホーム画面のアイコンを削除すると、アプリ内の動画・画像・区間・セットもすべて消えます。大事なものは写真アプリやMacにも残してください。'),
+    usage,
+    h('div', { class: 'small muted', style: 'margin-top:4px' }, 'アプリの版：' + APP_VERSION)));
+  if (navigator.storage && navigator.storage.estimate) navigator.storage.estimate().then(e => {
+    usage.textContent = `保存中の容量：約${Math.round((e.usage || 0) / 1048576)}MB（${S.media.length}件）`;
+  }).catch(() => {});
 }
 
 /* ===== 区間編集 ===== */
@@ -660,7 +1078,7 @@ function openEditor(m) {
 
 /* ===== 選択シート ===== */
 function openPicker(kind, current, title, onDone) {
-  const sheet = $('#picker'); const sel = new Set(current); let tag = null;
+  const sheet = $('#picker'); const sel = new Set(current); let tag = null, album = 'all';
   sheet.hidden = false; lockBody(true);
   const close = () => { sheet.hidden = true; sheet.innerHTML = ''; lockBody(false); };
   const doneBtn = h('button', { class: 'btn primary sm', onclick: () => { close(); onDone([...sel]); } });
@@ -669,9 +1087,12 @@ function openPicker(kind, current, title, onDone) {
   const body = h('div', { class: 'sheet-body' });
   const render = () => {
     const sc = body.scrollTop; body.innerHTML = '';
+    if (S.albums.length) body.append(h('div', { class: 'chips album-chips', style: 'margin:0 0 12px' },
+      [['all', 'すべて'], ['fav', '★ お気に入り'], ...S.albums.map(a => [a.id, a.name])].map(([id, l]) =>
+        h('button', { class: 'chip tag' + (album === id ? ' on' : ''), onclick: () => { album = id; render(); } }, l))));
     if (kind === 'image') {
-      const imgs = S.media.filter(m => m.type === 'image');
-      if (!imgs.length) { body.append(h('div', { class: 'empty' }, '画像がありません。「ライブラリ」から追加してください。')); return; }
+      const imgs = S.media.filter(m => m.type === 'image' && inAlbum(m, album));
+      if (!imgs.length) { body.append(h('div', { class: 'empty' }, '画像がありません。「ライブラリ」から追加してください。')); updCount(); return; }
       const ids = imgs.map(m => 'm:' + m.id);
       body.append(h('div', { class: 'selall' },
         h('button', { class: 'btn sm', onclick: () => { ids.forEach(i => sel.add(i)); render(); } }, 'すべて選択'),
@@ -680,8 +1101,8 @@ function openPicker(kind, current, title, onDone) {
       imgs.forEach(m => { const id = 'm:' + m.id; const b = h('button', { class: 'pick-img' + (sel.has(id) ? ' on' : '') }, h('img', { src: urlOf(m), alt: '' }), h('span', { class: 'check' }, '✓')); b.onclick = () => toggle(id, b); g.append(b); });
       body.append(g);
     } else {
-      const vids = S.media.filter(m => m.type === 'video');
-      if (!vids.length) { body.append(h('div', { class: 'empty' }, '動画がありません。「ライブラリ」から追加してください。')); return; }
+      const vids = S.media.filter(m => m.type === 'video' && inAlbum(m, album));
+      if (!vids.length) { body.append(h('div', { class: 'empty' }, '動画がありません。「ライブラリ」から追加してください。')); updCount(); return; }
       const tags = [...new Set(S.clips.flatMap(c => c.tags || []))];
       if (tags.length) {
         body.append(h('div', { class: 'chips', style: 'margin:0 0 12px' },
@@ -1068,8 +1489,9 @@ function closePlayer() {
 }
 
 /* ===== 起動 ===== */
-function renderAll() { renderLibrary(); renderPlay(); renderSets(); }
-const APP_VERSION = 'v4';
+function renderAll() { if (!S.ready) return; renderLibrary(); renderPlay(); renderSets(); renderSettings(); }
+function startApp() { S.ready = true; renderAll(); }
+const APP_VERSION = 'v5';
 if ('serviceWorker' in navigator) {
   const hadController = !!navigator.serviceWorker.controller;
   navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then(r => r.update()).catch(() => {});
@@ -1083,14 +1505,15 @@ if ('serviceWorker' in navigator) {
 (async function init() {
   try {
     await DB.open();
-    const [m, c, s, cfg] = await Promise.all([DB.all('media'), DB.all('clips'), DB.all('sets'), DB.get('config')]);
+    const [m, c, s, cfg, albums, lock] = await Promise.all([DB.all('media'), DB.all('clips'), DB.all('sets'), DB.get('config'), DB.get('albums'), DB.get('lock')]);
+    S.albums = albums || []; LOCK.cfg = lock || null;
     S.media = (m || []).sort((a, b) => b.added - a.added);
     S.clips = c || []; S.sets = (s || []).sort((a, b) => b.created - a.created);
     if (cfg) S.config = mergeConfig(cfg);
   } catch (e) {
     toast('保存機能が使えないため、閉じると内容が消えます', 5000);
   }
-  renderAll();
+  if (LOCK.cfg && LOCK.cfg.enabled) showLock(); else startApp();
 })();
 </script>
 </body>
